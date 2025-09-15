@@ -1,0 +1,29 @@
+{
+    "development": {
+      "username": "postgres",
+      "password": "password",
+      "database": "restaurant_dev",
+      "host": "localhost",
+      "dialect": "postgres"
+    },
+    "test": {
+      "username": "postgres",
+      "password": "password",
+      "database": "restaurant_test",
+      "host": "localhost",
+      "dialect": "postgres"
+    },
+    "production": {
+      "username": process.env.DB_USERNAME,
+      "password": process.env.DB_PASSWORD,
+      "database": process.env.DB_NAME,
+      "host": process.env.DB_HOST,
+      "dialect": "postgres",
+      "dialectOptions": {
+        "ssl": {
+          "require": true,
+          "rejectUnauthorized": false
+        }
+      }
+    }
+  }

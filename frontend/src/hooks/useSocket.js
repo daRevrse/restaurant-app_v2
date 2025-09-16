@@ -1,103 +1,85 @@
-import { useEffect, useRef, useCallback } from "react";
-import io from "socket.io-client";
+import { useCallback, useRef } from "react";
+import { io } from "socket.io-client";
+import { message } from "antd";
 
 export const useSocket = () => {
-  const socket = useRef(null);
-  const listeners = useRef(new Map());
+  const socketRef = useRef(null);
 
-  // Connecter au WebSocket
+  // Connecter le socket
   const connect = useCallback((token) => {
-    if (socket.current?.connected) return;
+    if (socketRef.current?.connected) {
+      return; // Déjà connecté
+    }
 
-    const serverURL =
-      process.env.REACT_APP_SOCKET_URL || "http://localhost:5000";
+    try {
+      socketRef.current = io(
+        process.env.REACT_APP_SOCKET_URL || "http://localhost:5000",
+        {
+          auth: {
+            token: token,
+          },
+          transports: ["websocket", "polling"],
+        }
+      );
 
-    socket.current = io(serverURL, {
-      withCredentials: true,
-      transports: ["websocket", "polling"],
-    });
+      socketRef.current.on("connect", () => {
+        console.log("✅ Socket connecté");
+      });
 
-    socket.current.on("connect", () => {
-      console.log("🔌 WebSocket connecté:", socket.current.id);
+      socketRef.current.on("disconnect", () => {
+        console.log("🔌 Socket déconnecté");
+      });
 
-      // Authentifier le socket
-      if (token) {
-        socket.current.emit("authenticate", token);
-      }
-    });
+      // Écouter les notifications
+      socketRef.current.on("notification", (data) => {
+        message.info(data.message);
+      });
 
-    socket.current.on("authenticated", (response) => {
-      if (response.success) {
-        console.log("✅ Socket authentifié:", response.user);
-      } else {
-        console.error("❌ Erreur auth socket:", response.error);
-      }
-    });
+      // Écouter les mises à jour de commandes
+      socketRef.current.on("order_update", (data) => {
+        message.success(`Commande ${data.orderNumber} : ${data.status}`);
+      });
 
-    socket.current.on("disconnect", (reason) => {
-      console.log("📴 Socket déconnecté:", reason);
-    });
-
-    socket.current.on("connect_error", (error) => {
-      console.error("❌ Erreur connexion socket:", error);
-    });
-
-    // Restaurer les listeners
-    listeners.current.forEach((callback, event) => {
-      socket.current.on(event, callback);
-    });
+      socketRef.current.on("connect_error", (error) => {
+        console.warn("Erreur connexion socket:", error);
+      });
+    } catch (error) {
+      console.error("Erreur initialisation socket:", error);
+    }
   }, []);
 
-  // Déconnecter le WebSocket
+  // Déconnecter le socket
   const disconnect = useCallback(() => {
-    if (socket.current) {
-      socket.current.disconnect();
-      socket.current = null;
-    }
-  }, []);
-
-  // Écouter un événement
-  const on = useCallback((event, callback) => {
-    listeners.current.set(event, callback);
-
-    if (socket.current) {
-      socket.current.on(event, callback);
-    }
-  }, []);
-
-  // Arrêter d'écouter un événement
-  const off = useCallback((event) => {
-    listeners.current.delete(event);
-
-    if (socket.current) {
-      socket.current.off(event);
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
     }
   }, []);
 
   // Émettre un événement
-  const emit = useCallback((event, data) => {
-    if (socket.current?.connected) {
-      socket.current.emit(event, data);
-    } else {
-      console.warn("Socket non connecté, impossible d'émettre:", event);
+  const emit = useCallback((eventName, data) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit(eventName, data);
     }
   }, []);
 
-  // Rejoindre une table
-  const joinTable = useCallback(
-    (tableId) => {
-      emit("joinTable", tableId);
-    },
-    [emit]
-  );
+  // Écouter un événement
+  const on = useCallback((eventName, callback) => {
+    if (socketRef.current) {
+      socketRef.current.on(eventName, callback);
+
+      // Retourner une fonction pour supprimer l'écouteur
+      return () => {
+        socketRef.current?.off(eventName, callback);
+      };
+    }
+  }, []);
 
   return {
     connect,
     disconnect,
-    on,
-    off,
     emit,
-    joinTable,
-    isConnected: socket.current?.connected || false,
+    on,
+    socket: socketRef.current,
   };
 };

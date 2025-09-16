@@ -2,32 +2,34 @@ import { useState, useEffect } from "react";
 
 export const useResponsive = () => {
   const [windowSize, setWindowSize] = useState({
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: undefined,
+    height: undefined,
   });
 
   useEffect(() => {
-    const handleResize = () => {
+    function handleResize() {
       setWindowSize({
         width: window.innerWidth,
         height: window.innerHeight,
       });
-    };
+    }
 
     window.addEventListener("resize", handleResize);
+    handleResize();
+
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  const isMobile = windowSize.width ? windowSize.width < 768 : false;
+  const isTablet = windowSize.width
+    ? windowSize.width >= 768 && windowSize.width < 1024
+    : false;
+  const isDesktop = windowSize.width ? windowSize.width >= 1024 : false;
+
   return {
-    ...windowSize,
-    isMobile: windowSize.width < 768,
-    isTablet: windowSize.width >= 768 && windowSize.width < 1024,
-    isDesktop: windowSize.width >= 1024,
-    breakpoint:
-      windowSize.width < 768
-        ? "mobile"
-        : windowSize.width < 1024
-        ? "tablet"
-        : "desktop",
+    windowSize,
+    isMobile,
+    isTablet,
+    isDesktop,
   };
 };

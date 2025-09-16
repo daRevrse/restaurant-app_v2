@@ -1,0 +1,9 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Disallow: /admin
+Disallow: /waiter
+Disallow: /kitchen
+Disallow: /api
+Allow: /
+Allow: /login
+Allow: /scan

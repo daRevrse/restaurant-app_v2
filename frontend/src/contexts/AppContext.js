@@ -1,3 +1,4 @@
+// frontend/src/contexts/AppContext.js - Version corrigée pour votre architecture
 import React, { createContext, useContext } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { useCart } from "../hooks/useCart";

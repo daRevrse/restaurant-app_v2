@@ -1,3 +1,4 @@
+// frontend/src/components/common/AppHeader.js - Version avec import corrigé
 import React from "react";
 import {
   Layout,
@@ -15,9 +16,11 @@ import {
   SettingOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  ShoppingCartOutlined,
 } from "@ant-design/icons";
 import { useApp } from "../../contexts/AppContext";
 import { useResponsive } from "../../hooks/useResponsive";
+import { useNavigate } from "react-router-dom";
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -25,6 +28,23 @@ const { Text } = Typography;
 const AppHeader = ({ collapsed, onToggle }) => {
   const { auth, cart } = useApp();
   const { isMobile } = useResponsive();
+  const navigate = useNavigate();
+
+  const handleMenuClick = ({ key }) => {
+    switch (key) {
+      case "profile":
+        navigate("/profile");
+        break;
+      case "settings":
+        navigate("/settings");
+        break;
+      case "logout":
+        auth.logout();
+        break;
+      default:
+        break;
+    }
+  };
 
   const userMenuItems = [
     {
@@ -44,7 +64,6 @@ const AppHeader = ({ collapsed, onToggle }) => {
       key: "logout",
       icon: <LogoutOutlined />,
       label: "Se déconnecter",
-      onClick: auth.logout,
     },
   ];
 
@@ -70,63 +89,63 @@ const AppHeader = ({ collapsed, onToggle }) => {
           />
         )}
         <div>
-          <Text strong style={{ fontSize: 18 }}>
-            Restaurant Manager
+          <Typography.Title level={4} style={{ margin: 0, color: "#1890ff" }}>
+            Restaurant
+          </Typography.Title>
+          <Text type="secondary" style={{ fontSize: "12px" }}>
+            {auth.user?.role === "admin" && "Administration"}
+            {auth.user?.role === "waiter" && "Service"}
+            {auth.user?.role === "kitchen" && "Cuisine"}
+            {auth.user?.role === "customer" && "Client"}
           </Text>
-          {!isMobile && (
-            <Text type="secondary" style={{ marginLeft: 16 }}>
-              {getRoleDisplayName(auth.user?.role)}
-            </Text>
-          )}
         </div>
       </div>
 
       {/* Partie droite */}
       <Space size="middle">
-        {/* Notifications */}
-        <Badge count={0} size="small">
-          <Button
-            type="text"
-            icon={<BellOutlined />}
-            style={{ border: "none" }}
-          />
-        </Badge>
-
-        {/* Panier (pour les clients) */}
-        {auth.user?.role === "customer" && (
-          <Badge count={cart.itemCount} size="small">
+        {/* Panier pour les clients */}
+        {auth.user?.role === "customer" && cart && (
+          <Badge count={cart.totalItems} showZero>
             <Button
               type="text"
               icon={<ShoppingCartOutlined />}
-              style={{ border: "none" }}
-            />
+              onClick={() => navigate("/cart")}
+            >
+              {!isMobile && "Panier"}
+            </Button>
           </Badge>
         )}
 
+        {/* Notifications */}
+        <Badge count={0}>
+          <Button type="text" icon={<BellOutlined />} />
+        </Badge>
+
         {/* Menu utilisateur */}
-        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" arrow>
+        <Dropdown
+          menu={{
+            items: userMenuItems,
+            onClick: handleMenuClick,
+          }}
+          placement="bottomRight"
+          arrow
+        >
           <Space style={{ cursor: "pointer" }}>
-            <Avatar
-              size="small"
-              icon={<UserOutlined />}
-              src={auth.user?.avatar}
-            />
-            {!isMobile && <Text>{auth.user?.username}</Text>}
+            <Avatar icon={<UserOutlined />} />
+            {!isMobile && (
+              <div>
+                <Text strong>{auth.user?.username}</Text>
+                <br />
+                <Text type="secondary" style={{ fontSize: "12px" }}>
+                  {auth.user?.role}
+                </Text>
+              </div>
+            )}
           </Space>
         </Dropdown>
       </Space>
     </Header>
   );
-};
-
-const getRoleDisplayName = (role) => {
-  const roleNames = {
-    customer: "Client",
-    waiter: "Serveur",
-    kitchen: "Cuisine",
-    admin: "Administrateur",
-  };
-  return roleNames[role] || role;
 };
 
 export default AppHeader;

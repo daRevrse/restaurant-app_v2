@@ -1,67 +1,77 @@
-import { useState, useEffect, useCallback } from "react";
-import * as menuService from "../services/menuService";
+import { useState, useEffect } from "react";
+import apiClient from "../services/apiClient";
 
 export const useMenu = () => {
-  const [dishes, setDishes] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [dishes, setDishes] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
-  // Charger les catégories
-  const loadCategories = useCallback(async () => {
+  // Récupérer les catégories
+  const fetchCategories = async () => {
     try {
-      setLoading(true);
-      const categoriesData = await menuService.getCategories();
-      setCategories(categoriesData);
+      const response = await apiClient.get("/categories?include_dishes=true");
+      setCategories(response.categories || []);
     } catch (error) {
-      console.error("Erreur chargement catégories:", error);
-    } finally {
-      setLoading(false);
+      console.error("Erreur récupération catégories:", error);
     }
-  }, []);
+  };
 
-  // Charger les plats
-  const loadDishes = useCallback(async (filters = {}) => {
+  // Récupérer les plats
+  const fetchDishes = async (categoryId = null) => {
     try {
-      setLoading(true);
-      const dishesData = await menuService.getDishes(filters);
-      setDishes(dishesData);
-    } catch (error) {
-      console.error("Erreur chargement plats:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      const params = new URLSearchParams();
+      if (categoryId) params.append("category_id", categoryId);
+      if (searchTerm) params.append("search", searchTerm);
 
-  // Filtrer les plats affichés
+      const response = await apiClient.get(`/dishes?${params.toString()}`);
+      setDishes(response.dishes || []);
+    } catch (error) {
+      console.error("Erreur récupération plats:", error);
+    }
+  };
+
+  // Filtrer les plats selon les critères
   const filteredDishes = dishes.filter((dish) => {
-    const matchesCategory =
-      !selectedCategory || dish.category_id === selectedCategory;
     const matchesSearch =
       !searchTerm ||
       dish.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       dish.description?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    return matchesCategory && matchesSearch && dish.is_available;
+    const matchesCategory =
+      !selectedCategory || dish.category_id === selectedCategory;
+
+    return matchesSearch && matchesCategory && dish.is_available;
   });
 
   // Charger les données initiales
   useEffect(() => {
-    loadCategories();
-    loadDishes();
-  }, [loadCategories, loadDishes]);
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([fetchCategories(), fetchDishes()]);
+      setLoading(false);
+    };
+
+    loadData();
+  }, []);
+
+  // Recharger les plats quand les filtres changent
+  useEffect(() => {
+    fetchDishes(selectedCategory);
+  }, [selectedCategory, searchTerm]);
 
   return {
-    dishes,
     categories,
-    filteredDishes,
+    dishes: filteredDishes,
     loading,
-    selectedCategory,
     searchTerm,
-    setSelectedCategory,
     setSearchTerm,
-    refreshMenu: loadDishes,
-    refreshCategories: loadCategories,
+    selectedCategory,
+    setSelectedCategory,
+    refetch: () => {
+      fetchCategories();
+      fetchDishes(selectedCategory);
+    },
   };
 };

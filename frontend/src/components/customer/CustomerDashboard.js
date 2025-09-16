@@ -1,71 +1,45 @@
 import React from "react";
-import { Row, Col, Card, Spin, Alert } from "antd";
-import { useApp } from "../../contexts/AppContext";
+import { Row, Col, Card, Typography, Spin } from "antd";
 import { useMenu } from "../../hooks/useMenu";
-import { useResponsive } from "../../hooks/useResponsive";
-import CategorySelector from "./CategorySelector";
-import MenuGrid from "./MenuGrid";
-import CartSidebar from "./CartSidebar";
 import SearchBar from "./SearchBar";
+import CategoryFilter from "./CategoryFilter";
+import DishGrid from "./DishGrid";
+import { useApp } from "../../contexts/AppContext";
+
+const { Title } = Typography;
 
 const CustomerDashboard = () => {
-  const { auth, cart } = useApp();
-  const { loading, error } = useMenu();
-  const { isMobile } = useResponsive();
+  const { auth } = useApp();
+  const { categories, dishes, loading } = useMenu();
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "50vh",
-        }}
-      >
-        <Spin size="large" />
+      <div style={{ textAlign: "center", padding: "50px" }}>
+        <Spin size="large" tip="Chargement du menu..." />
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <Alert
-        message="Erreur de chargement"
-        description="Impossible de charger le menu. Veuillez réessayer."
-        type="error"
-        showIcon
-        style={{ margin: 20 }}
-      />
-    );
-  }
-
   return (
-    <div
-      style={{
-        padding: isMobile ? 8 : 20,
-        minHeight: "100vh",
-        backgroundColor: "#f5f5f5",
-      }}
-    >
+    <div>
       <Row gutter={[16, 16]}>
-        {/* Menu principal */}
-        <Col xs={24} lg={18}>
-          <Card
-            title="Menu du Restaurant"
-            size={isMobile ? "small" : "default"}
-            style={{ marginBottom: 16 }}
-          >
-            <SearchBar />
-            <CategorySelector />
+        <Col span={24}>
+          <Card>
+            <Title level={2}>Bienvenue {auth.user?.username} ! 🍽️</Title>
+            <p>Découvrez notre délicieux menu et passez votre commande.</p>
           </Card>
-
-          <MenuGrid />
         </Col>
 
-        {/* Panier (sidebar sur desktop, modal sur mobile) */}
-        <Col xs={24} lg={6}>
-          <CartSidebar />
+        <Col span={24}>
+          <SearchBar />
+        </Col>
+
+        <Col span={24}>
+          <CategoryFilter categories={categories} />
+        </Col>
+
+        <Col span={24}>
+          <DishGrid dishes={dishes} />
         </Col>
       </Row>
     </div>

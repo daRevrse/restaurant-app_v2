@@ -69,10 +69,9 @@ export const useAuth = () => {
     } catch (error) {
       console.error("Erreur logout:", error);
     } finally {
-      // Nettoyer l'état local dans tous les cas
+      // Nettoyer l'état
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
-      localStorage.removeItem("tableSession");
       setUser(null);
       setIsAuthenticated(false);
       disconnect();
@@ -86,16 +85,20 @@ export const useAuth = () => {
         setLoading(true);
         const response = await authService.register(userData);
 
-        // Auto-login après inscription
+        // Sauvegarder les tokens
         localStorage.setItem("accessToken", response.accessToken);
         localStorage.setItem("refreshToken", response.refreshToken);
+
+        // Mettre à jour l'état
         setUser(response.user);
         setIsAuthenticated(true);
+
+        // Connecter WebSocket
         connect(response.accessToken);
 
         return response;
       } catch (error) {
-        console.error("Erreur inscription:", error);
+        console.error("Erreur register:", error);
         throw error;
       } finally {
         setLoading(false);

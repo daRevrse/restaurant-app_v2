@@ -1,47 +1,89 @@
-import { notification } from "antd";
+import { message } from 'antd';
 
-export const handleApiError = (error, customMessage = null) => {
-  console.error("API Error:", error);
+export const handleApiError = (error) => {
+  console.error('API Error:', error);
 
-  let message = customMessage || "Une erreur est survenue";
-  let description = "";
+  if (error.response) {
+    // Erreur de réponse du serveur
+    const { status, data } = error.response;
+    
+    switch (status) {
+      case 400:
+        message.error(data.error || 'Données invalides');
+        break;
+      case 401:
+        message.error('Session expirée, veuillez vous reconnecter');
+        break;
+      case 403:
+        message.error('Accès non autorisé');
+        break;
+      case 404:
+        message.error('Ressource non trouvée');
+        break;
+      case 409:
+        message.error(data.error || 'Conflit de données');
+        break;
+      case 500:
+        message.error('Erreur serveur');
+        break;
+      default:
+        message.error(data.error || 'Une erreur est survenue');
+    }
 
-  if (error?.data?.error) {
-    message = error.data.error;
-    description = error.data.details?.map((d) => d.message).join(", ") || "";
-  } else if (error?.message) {
-    message = error.message;
+    return data.error || 'Une erreur est survenue';
+  } else if (error.request) {
+    // Erreur réseau
+    message.error('Problème de connexion réseau');
+    return 'Problème de connexion réseau';
+  } else {
+    // Autre erreur
+    message.error('Une erreur inattendue s\'est produite');
+    return 'Une erreur inattendue s\'est produite';
   }
-
-  // Afficher la notification d'erreur
-  notification.error({
-    message,
-    description,
-    placement: "topRight",
-    duration: 5,
-  });
-
-  return { message, description };
 };
 
-export const handleNetworkError = () => {
-  notification.error({
-    message: "Problème de connexion",
-    description: "Vérifiez votre connexion internet et réessayez.",
-    placement: "topRight",
-    duration: 5,
-  });
+export const formatPrice = (price) => {
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'XOF', // Franc CFA pour le Togo
+    minimumFractionDigits: 0,
+  }).format(price);
 };
 
-export const handleValidationError = (validationErrors) => {
-  const errorMessages = validationErrors
-    .map((err) => `${err.field}: ${err.message}`)
-    .join("\n");
+export const formatDate = (dateString) => {
+  return new Intl.DateTimeFormat('fr-FR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(dateString));
+};
 
-  notification.error({
-    message: "Erreurs de validation",
-    description: errorMessages,
-    placement: "topRight",
-    duration: 7,
-  });
+export const getStatusColor = (status) => {
+  const statusColors = {
+    pending: 'orange',
+    confirmed: 'blue',
+    preparing: 'purple',
+    ready: 'cyan',
+    served: 'green',
+    completed: 'green',
+    cancelled: 'red',
+  };
+
+  return statusColors[status] || 'default';
+};
+
+export const getStatusText = (status) => {
+  const statusTexts = {
+    pending: 'En attente',
+    confirmed: 'Confirmée',
+    preparing: 'En préparation',
+    ready: 'Prête',
+    served: 'Servie',
+    completed: 'Terminée',
+    cancelled: 'Annulée',
+  };
+
+  return statusTexts[status] || status;
 };

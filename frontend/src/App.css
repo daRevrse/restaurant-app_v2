@@ -1,0 +1,154 @@
+/* frontend/src/App.css */
+
+/* Styles spécifiques à App.js */
+.app-layout {
+  min-height: 100vh;
+}
+
+.app-header {
+  background: #fff;
+  padding: 0 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  z-index: 10;
+}
+
+.app-content {
+  padding: 24px;
+  margin: 0;
+  min-height: 360px;
+  background: #f0f2f5;
+}
+
+.app-content.public {
+  padding: 0;
+  background: #fff;
+}
+
+/* Sidebar styles */
+.app-sidebar {
+  background: #fff;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #f0f0f0;
+  background: #1890ff;
+  color: white;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.sidebar-logo.collapsed {
+  font-size: 18px;
+}
+
+/* Menu styles */
+.app-menu {
+  border-right: 0;
+  height: calc(100vh - 64px);
+}
+
+.app-menu .ant-menu-item {
+  margin: 0;
+  height: 48px;
+  line-height: 48px;
+}
+
+.app-menu .ant-menu-submenu {
+  margin: 0;
+}
+
+.app-menu .ant-menu-item-selected {
+  background-color: #e6f7ff;
+  border-right: 3px solid #1890ff;
+}
+
+/* Header user section */
+.header-user-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #262626;
+}
+
+.user-role {
+  font-size: 12px;
+  color: #8c8c8c;
+  text-transform: capitalize;
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+  .app-content {
+    padding: 16px;
+  }
+
+  .header-user-section .user-info {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-content {
+    padding: 12px;
+  }
+
+  .app-header {
+    padding: 0 16px;
+  }
+}
+
+/* Loading states */
+.app-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: #f0f2f5;
+}
+
+.app-loading .ant-spin {
+  margin-bottom: 16px;
+}
+
+/* Page transitions */
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 300ms,
+    transform 300ms;
+}
+
+.page-transition-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-transition-exit-active {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition:
+    opacity 300ms,
+    transform 300ms;
+}

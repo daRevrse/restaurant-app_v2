@@ -1,3 +1,4 @@
+const { Table, TableSession } = require("../models");
 const QRCode = require("qrcode");
 const crypto = require("crypto");
 
@@ -145,3 +146,5 @@ class TableService {
     });
   }
 }
+
+module.exports = TableService;

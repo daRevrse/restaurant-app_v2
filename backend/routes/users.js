@@ -1,5 +1,7 @@
+// backend/routes/users.js - Version corrigée
 const express = require("express");
 const { User } = require("../models");
+const { Op } = require("sequelize");
 const { authenticateToken, authorizeRoles } = require("../middleware/auth");
 const { validateUUIDParam } = require("../middleware/validation");
 const { body } = require("express-validator");
@@ -128,8 +130,8 @@ router.get(
       if (isActive !== undefined) whereClause.isActive = isActive === "true";
       if (search) {
         whereClause[Op.or] = [
-          { username: { [Op.iLike]: `%${search}%` } },
-          { email: { [Op.iLike]: `%${search}%` } },
+          { username: { [Op.like]: `%${search}%` } },
+          { email: { [Op.like]: `%${search}%` } },
         ];
       }
 

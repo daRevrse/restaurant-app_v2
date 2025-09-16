@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const { Dish, Category } = require("../models");
+const { Op } = require("sequelize");
 const {
   authenticateToken,
   authorizeRoles,
@@ -51,8 +52,8 @@ router.get("/", optionalAuth, async (req, res) => {
       whereClause.is_available = is_available === "true";
     if (search) {
       whereClause[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { description: { [Op.iLike]: `%${search}%` } },
+        { name: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
       ];
     }
 
@@ -77,6 +78,36 @@ router.get("/", optionalAuth, async (req, res) => {
     res.status(500).json({
       error: "Erreur lors de la récupération des plats",
       code: "DISHES_FETCH_ERROR",
+    });
+  }
+});
+
+// Récupérer un plat par ID
+router.get("/:dishId", optionalAuth, validateUUIDParam("dishId"), async (req, res) => {
+  try {
+    const dish = await Dish.findByPk(req.params.dishId, {
+      include: [
+        {
+          model: Category,
+          as: "category",
+          attributes: ["id", "name"],
+        },
+      ],
+    });
+
+    if (!dish) {
+      return res.status(404).json({
+        error: "Plat non trouvé",
+        code: "DISH_NOT_FOUND",
+      });
+    }
+
+    res.json({ dish });
+  } catch (error) {
+    console.error("Erreur récupération plat:", error);
+    res.status(500).json({
+      error: "Erreur lors de la récupération du plat",
+      code: "DISH_FETCH_ERROR",
     });
   }
 });

@@ -1,13 +1,8 @@
+// backend/middleware/rateLimiter.js - Version sans Redis
 const rateLimit = require("express-rate-limit");
-const RedisStore = require("rate-limit-redis");
-const redis = require("../config/redis");
 
-// Rate limiting général
+// Rate limiting général (en mémoire)
 const generalLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: "rl:general:",
-  }),
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // 100 requêtes par IP
   message: {
@@ -20,10 +15,6 @@ const generalLimiter = rateLimit({
 
 // Rate limiting pour l'authentification
 const authLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: "rl:auth:",
-  }),
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 tentatives de connexion
   message: {
@@ -35,10 +26,6 @@ const authLimiter = rateLimit({
 
 // Rate limiting pour les commandes
 const orderLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: "rl:orders:",
-  }),
   windowMs: 60 * 1000, // 1 minute
   max: 10, // 10 commandes par minute
   message: {

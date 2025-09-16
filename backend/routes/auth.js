@@ -1,6 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { User } = require("../models");
+const { Op } = require("sequelize");
 const {
   validateUserRegistration,
   validateUserLogin,
@@ -90,6 +91,53 @@ router.post("/login", authLimiter, validateUserLogin, async (req, res) => {
 
     // Générer les tokens
     const { accessToken, refreshToken } = generateTokens(user);
+
+    // Mettre à jour le dernier login et le refresh token
+    await user.update({
+      lastLogin: new Date(),
+      refreshToken,
+    });
+
+    res.json({
+      message: "Connexion réussie",
+      user: user.toSafeObject(),
+      accessToken,
+      refreshToken,
+    });
+  } catch (error) {
+    console.error("Erreur connexion:", error);
+    res.status(500).json({
+      error: "Erreur lors de la connexion",
+      code: "LOGIN_ERROR",
+    });
+  }
+});
+
+// Refresh token
+router.post("/refresh", async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        error: "Refresh token requis",
+        code: "REFRESH_TOKEN_MISSING",
+      });
+    }
+
+    // Vérifier le refresh token
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const user = await User.findByPk(decoded.id);
+
+    if (!user || !user.isActive || user.refreshToken !== refreshToken) {
+      return res.status(401).json({
+        error: "Refresh token invalide",
+        code: "INVALID_REFRESH_TOKEN",
+      });
+    }
+
+    // Générer un nouveau access token
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
 
     // Mettre à jour le refresh token
     await user.update({ refreshToken: newRefreshToken });

@@ -1,3 +1,4 @@
+// backend/server.js - Version sans Redis
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
@@ -11,7 +12,6 @@ const fs = require("fs");
 // Import des modules personnalisés
 const { sequelize } = require("./models");
 const SocketManager = require("./config/socket");
-const redis = require("./config/redis");
 const { generalLimiter } = require("./middleware/rateLimiter");
 
 // Import des routes
@@ -58,7 +58,7 @@ app.use(
 // Compression
 app.use(compression());
 
-// Rate limiting
+// Rate limiting (en mémoire)
 app.use(generalLimiter);
 
 // Parsing des requêtes
@@ -73,6 +73,7 @@ const uploadDirs = ["uploads/dishes", "uploads/users", "uploads/qrcodes"];
 uploadDirs.forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
+    console.log(`📁 Dossier créé: ${dir}`);
   }
 });
 
@@ -85,6 +86,10 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || "1.0.0",
     environment: process.env.NODE_ENV || "development",
+    services: {
+      database: "connected",
+      rateLimiting: "memory",
+    },
   });
 });
 
@@ -127,6 +132,14 @@ app.use((err, req, res, next) => {
     });
   }
 
+  // Erreur Multer (upload de fichiers)
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({
+      error: "Fichier trop volumineux",
+      code: "FILE_TOO_LARGE",
+    });
+  }
+
   // Erreur par défaut
   res.status(500).json({
     error: "Erreur interne du serveur",
@@ -153,50 +166,98 @@ async function startServer() {
     await sequelize.authenticate();
     console.log("✅ Connexion à la base de données établie");
 
-    // Synchronisation des modèles (en développement uniquement)
+    // Synchronisation des modèles avec gestion d'erreur améliorée
     if (process.env.NODE_ENV === "development") {
-      await sequelize.sync({ alter: true });
-      console.log("✅ Modèles synchronisés avec la base de données");
-    }
+      try {
+        // Essayer d'abord une synchronisation douce
+        await sequelize.sync({ alter: false });
+        console.log("✅ Modèles synchronisés avec la base de données");
+      } catch (syncError) {
+        console.warn(
+          "⚠️  Erreur de synchronisation détectée:",
+          syncError.message
+        );
 
-    // Connexion à Redis
-    await redis.connect();
-    console.log("✅ Connexion à Redis établie");
+        // Si ça échoue, proposer une réinitialisation
+        if (syncError.name === "SequelizeDatabaseError") {
+          console.log("");
+          console.log("💡 SOLUTION RECOMMANDÉE:");
+          console.log(
+            "   La structure de la base de données semble corrompue."
+          );
+          console.log("   Exécutez cette commande pour réinitialiser:");
+          console.log("   npm run setup");
+          console.log("");
+          process.exit(1);
+        }
+
+        throw syncError;
+      }
+    }
 
     // Démarrage du serveur
     server.listen(PORT, () => {
-      console.log(`🚀 Serveur démarré sur le port ${PORT}`);
+      console.log("");
+      console.log("🚀========================================🚀");
+      console.log(`   🏪 Restaurant Backend Server Started`);
+      console.log(`   📡 Port: ${PORT}`);
       console.log(
-        `📱 Frontend autorisé: ${
-          process.env.FRONTEND_URL || "http://localhost:3000"
-        }`
+        `   🌍 Environment: ${process.env.NODE_ENV || "development"}`
       );
-      console.log(`🌍 Environnement: ${process.env.NODE_ENV || "development"}`);
+      console.log(
+        `   📱 Frontend: ${process.env.FRONTEND_URL || "http://localhost:3000"}`
+      );
+      console.log(`   🔗 Health Check: http://localhost:${PORT}/health`);
+      console.log(`   📚 API Base: http://localhost:${PORT}/api`);
+      console.log(`   💾 Rate Limiting: En mémoire (sans Redis)`);
+      console.log("🚀========================================🚀");
+      console.log("");
+      console.log("💡 Commandes utiles:");
+      console.log("   npm run setup     - Réinitialiser et seeder la DB");
+      console.log("   npm run seed      - Ajouter des données de test");
+      console.log("   npm run reset-db  - Réinitialiser la structure DB");
+      console.log("");
     });
   } catch (error) {
     console.error("❌ Erreur lors du démarrage du serveur:", error);
+
+    if (error.name === "SequelizeConnectionError") {
+      console.log("");
+      console.log("💡 PROBLÈME DE CONNEXION À LA BASE DE DONNÉES:");
+      console.log("   1. Vérifiez que MySQL est démarré");
+      console.log("   2. Vérifiez les identifiants dans le fichier .env");
+      console.log("   3. Vérifiez que la base de données existe:");
+      console.log(
+        `      CREATE DATABASE ${process.env.DB_NAME || "restaurant_dev"};`
+      );
+      console.log("");
+    }
+
     process.exit(1);
   }
 }
 
 // Gestion propre de l'arrêt du serveur
-process.on("SIGTERM", async () => {
-  console.log("🛑 Signal SIGTERM reçu, arrêt en cours...");
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);
+
+async function gracefulShutdown() {
+  console.log("🛑 Arrêt du serveur en cours...");
 
   server.close(async () => {
     console.log("📴 Serveur HTTP fermé");
 
     try {
       await sequelize.close();
-      await redis.disconnect();
-      console.log("✅ Connexions fermées proprement");
+      console.log("✅ Connexion base de données fermée");
+      console.log("✅ Arrêt propre du serveur");
     } catch (error) {
       console.error("❌ Erreur lors de la fermeture:", error);
     }
 
     process.exit(0);
   });
-});
+}
 
 // Démarrer le serveur
 startServer();

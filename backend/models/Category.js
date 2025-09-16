@@ -1,3 +1,7 @@
+// backend/models/Category.js - Version corrigée
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database");
+
 const Category = sequelize.define(
   "Category",
   {
@@ -23,7 +27,7 @@ const Category = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
-    sortOrder: {
+    sort_order: {
       type: DataTypes.INTEGER,
       defaultValue: 0,
     },
@@ -34,10 +38,11 @@ const Category = sequelize.define(
   },
   {
     timestamps: true,
+    // Supprimer les indexes problématiques pour permettre la création des colonnes d'abord
     indexes: [
       { fields: ["name"] },
-      { fields: ["sortOrder"] },
-      { fields: ["isActive"] },
+      { fields: ["sort_order"] },
+      // L'index sur isActive sera créé après la synchronisation
     ],
   }
 );

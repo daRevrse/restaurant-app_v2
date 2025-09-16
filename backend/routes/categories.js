@@ -1,3 +1,4 @@
+// backend/routes/categories.js - Version complète
 const express = require('express');
 const { Category, Dish } = require('../models');
 const { authenticateToken, authorizeRoles, optionalAuth } = require('../middleware/auth');
@@ -72,7 +73,8 @@ router.get('/:categoryId', optionalAuth, async (req, res) => {
           model: Dish,
           as: 'dishes',
           where: { is_available: true },
-          required: false
+          required: false,
+          order: [['sort_order', 'ASC'], ['name', 'ASC']]
         }
       ]
     });
@@ -153,8 +155,67 @@ router.put('/:categoryId',
         });
       }
 
+      // Vérifier l'unicité du nom (sauf pour la catégorie actuelle)
+      if (name && name !== category.name) {
+        const existingCategory = await Category.findOne({
+          where: {
+            name,
+            id: { [Op.ne]: req.params.categoryId }
+          }
+        });
+        
+        if (existingCategory) {
+          return res.status(409).json({
+            error: 'Une catégorie avec ce nom existe déjà',
+            code: 'CATEGORY_NAME_EXISTS'
+          });
+        }
+      }
+
+      // Préparer les données de mise à jour
+      const updateData = {};
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (icon !== undefined) updateData.icon = icon;
+      if (sort_order !== undefined) updateData.sort_order = sort_order;
+      if (isActive !== undefined) updateData.isActive = isActive;
+
+      await category.update(updateData);
+
+      res.json({
+        message: 'Catégorie mise à jour avec succès',
+        category
+      });
+
+    } catch (error) {
+      console.error('Erreur mise à jour catégorie:', error);
+      res.status(400).json({
+        error: error.message,
+        code: 'CATEGORY_UPDATE_ERROR'
+      });
+    }
+  }
+);
+
+// Supprimer une catégorie
+router.delete('/:categoryId',
+  authenticateToken,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    try {
+      const category = await Category.findByPk(req.params.categoryId);
+      
+      if (!category) {
+        return res.status(404).json({
+          error: 'Catégorie non trouvée',
+          code: 'CATEGORY_NOT_FOUND'
+        });
+      }
+
       // Vérifier s'il y a des plats dans cette catégorie
-      const dishCount = await Dish.count({ where: { category_id: req.params.categoryId } });
+      const dishCount = await Dish.count({ 
+        where: { category_id: req.params.categoryId } 
+      });
       
       if (dishCount > 0) {
         return res.status(400).json({
@@ -180,70 +241,109 @@ router.put('/:categoryId',
   }
 );
 
-// Exécuter si appelé directement
-if (require.main === module) {
-    sequelize.sync({ force: false })
-      .then(() => seedDatabase())
-      .then(() => process.exit(0))
-      .catch(error => {
-        console.error(error);
-        process.exit(1);
-      });
-  }
-          });
-        }
-  
-        // Vérifier l'unicité du nom (sauf pour la catégorie actuelle)
-        if (name !== category.name) {
-          const existingCategory = await Category.findOne({
-            where: {
-              name,
-              id: { [Op.ne]: req.params.categoryId }
-            }
-          });
-          
-          if (existingCategory) {
-            return res.status(409).json({
-              error: 'Une catégorie avec ce nom existe déjà',
-              code: 'CATEGORY_NAME_EXISTS'
-            });
-          }
-        }
-  
-        await category.update({
-          name,
-          description,
-          icon,
-          sort_order,
-          isActive
-        });
-  
-        res.json({
-          message: 'Catégorie mise à jour avec succès',
-          category
-        });
-  
-      } catch (error) {
-        console.error('Erreur mise à jour catégorie:', error);
-        res.status(400).json({
-          error: error.message,
-          code: 'CATEGORY_UPDATE_ERROR'
+// Réorganiser l'ordre des catégories
+router.patch('/reorder',
+  authenticateToken,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    try {
+      const { categories } = req.body; // Array of {id, sort_order}
+
+      if (!Array.isArray(categories)) {
+        return res.status(400).json({
+          error: 'Le format des données est invalide',
+          code: 'INVALID_DATA_FORMAT'
         });
       }
+
+      // Mettre à jour l'ordre de chaque catégorie
+      const updatePromises = categories.map(({ id, sort_order }) =>
+        Category.update({ sort_order }, { where: { id } })
+      );
+
+      await Promise.all(updatePromises);
+
+      res.json({
+        message: 'Ordre des catégories mis à jour avec succès'
+      });
+
+    } catch (error) {
+      console.error('Erreur réorganisation catégories:', error);
+      res.status(500).json({
+        error: 'Erreur lors de la réorganisation',
+        code: 'CATEGORY_REORDER_ERROR'
+      });
     }
-  );
-  
-  // Supprimer une catégorie
-  router.delete('/:categoryId',
-    authenticateToken,
-    authorizeRoles('admin'),
-    async (req, res) => {
-      try {
-        const category = await Category.findByPk(req.params.categoryId);
-        
-        if (!category) {
-          return res.status(404).json({
-            error: 'Catégorie non trouvée',
-            code: 'CATEGORY_NOT_FOUND'
+  }
+);
+
+// Activer/désactiver une catégorie
+router.patch('/:categoryId/toggle',
+  authenticateToken,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    try {
+      const category = await Category.findByPk(req.params.categoryId);
+      
+      if (!category) {
+        return res.status(404).json({
+          error: 'Catégorie non trouvée',
+          code: 'CATEGORY_NOT_FOUND'
+        });
+      }
+
+      await category.update({ isActive: !category.isActive });
+
+      res.json({
+        message: `Catégorie ${category.isActive ? 'activée' : 'désactivée'} avec succès`,
+        category
+      });
+
+    } catch (error) {
+      console.error('Erreur toggle catégorie:', error);
+      res.status(500).json({
+        error: 'Erreur lors du changement de statut',
+        code: 'CATEGORY_TOGGLE_ERROR'
+      });
+    }
+  }
+);
+
+// Récupérer les statistiques des catégories (admin)
+router.get('/admin/stats',
+  authenticateToken,
+  authorizeRoles('admin'),
+  async (req, res) => {
+    try {
+      const stats = await Category.findAll({
+        attributes: [
+          'id',
+          'name',
+          'isActive',
+          [sequelize.fn('COUNT', sequelize.col('dishes.id')), 'dishCount']
+        ],
+        include: [
+          {
+            model: Dish,
+            as: 'dishes',
+            attributes: [],
+            required: false
+          }
+        ],
+        group: ['Category.id'],
+        order: [['sort_order', 'ASC']]
+      });
+
+      res.json({ stats });
+
+    } catch (error) {
+      console.error('Erreur stats catégories:', error);
+      res.status(500).json({
+        error: 'Erreur lors de la récupération des statistiques',
+        code: 'CATEGORY_STATS_ERROR'
+      });
+    }
+  }
+);
 
 module.exports = router;

@@ -1,3 +1,4 @@
+// frontend/src/components/customer/CartSidebar.js - Version améliorée
 import React, { useState } from "react";
 import {
   Card,
@@ -6,12 +7,15 @@ import {
   Empty,
   Badge,
   Drawer,
-  FloatButton,
   Space,
   Typography,
   Divider,
   Modal,
-  Result,
+  Input,
+  Alert,
+  InputNumber,
+  Tag,
+  Tooltip,
 } from "antd";
 import {
   ShoppingCartOutlined,
@@ -19,23 +23,27 @@ import {
   MinusOutlined,
   PlusOutlined,
   ClearOutlined,
+  CheckCircleOutlined,
+  CloseOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import { useApp } from "../../contexts/AppContext";
 import { useOrders } from "../../hooks/useOrders";
-import { useResponsive } from "../../hooks/useResponsive";
 import { formatCurrency } from "../../utils/formatters";
 import * as orderService from "../../services/orderService";
 import OrderSuccessModal from "./OrderSuccessModal";
 
 const { Text, Title } = Typography;
+const { TextArea } = Input;
 
-const CartSidebar = () => {
+const CartSidebar = ({ visible, onClose, tableSession }) => {
   const { cart } = useApp();
   const { placeOrder, loading: orderLoading } = useOrders();
-  const { isMobile } = useResponsive();
-  const [drawerVisible, setDrawerVisible] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [successOrder, setSuccessOrder] = useState(null);
+  const [specialInstructions, setSpecialInstructions] = useState("");
+  const [editingItem, setEditingItem] = useState(null);
+  const [itemInstructions, setItemInstructions] = useState("");
 
   // Calculer les totaux
   const subtotal = cart.total;
@@ -44,11 +52,21 @@ const CartSidebar = () => {
   const total = subtotal + taxAmount;
 
   const handleRemoveItem = (itemId) => {
-    cart.removeItem(itemId);
+    Modal.confirm({
+      title: "Supprimer cet article ?",
+      content: "Êtes-vous sûr de vouloir retirer cet article du panier ?",
+      okText: "Supprimer",
+      cancelText: "Annuler",
+      onOk: () => cart.removeItem(itemId),
+    });
   };
 
   const handleUpdateQuantity = (itemId, newQuantity) => {
-    cart.updateQuantity(itemId, newQuantity);
+    if (newQuantity <= 0) {
+      handleRemoveItem(itemId);
+    } else {
+      cart.updateQuantity(itemId, newQuantity);
+    }
   };
 
   const handleClearCart = () => {
@@ -61,14 +79,25 @@ const CartSidebar = () => {
     });
   };
 
+  const handleEditInstructions = (item) => {
+    setEditingItem(item);
+    setItemInstructions(item.special_instructions || "");
+  };
+
+  const handleSaveInstructions = () => {
+    if (editingItem) {
+      cart.updateItem(editingItem.id, {
+        ...editingItem,
+        special_instructions: itemInstructions,
+      });
+      setEditingItem(null);
+      setItemInstructions("");
+    }
+  };
+
   const handlePlaceOrder = async () => {
     try {
-      // Récupérer la session de table depuis localStorage
-      const tableSession = JSON.parse(
-        localStorage.getItem("tableSession") || "{}"
-      );
-
-      if (!tableSession.tableId) {
+      if (!tableSession?.tableId) {
         Modal.error({
           title: "Session requise",
           content: "Veuillez scanner le QR code de votre table pour commander.",
@@ -76,264 +105,303 @@ const CartSidebar = () => {
         return;
       }
 
+      if (cart.items.length === 0) {
+        Modal.warning({
+          title: "Panier vide",
+          content: "Ajoutez des articles à votre panier avant de commander.",
+        });
+        return;
+      }
+
       // Préparer les données de commande
-      const orderData = orderService.prepareOrderData(cart.items, tableSession);
+      const orderData = orderService.prepareOrderData(
+        cart.items,
+        tableSession,
+        specialInstructions
+      );
 
       // Passer la commande
       const order = await placeOrder(orderData);
 
-      // Vider le panier et afficher le succès
+      // Succès
       cart.clearCart();
       setSuccessOrder(order);
       setOrderSuccess(true);
-      setDrawerVisible(false);
+      onClose();
     } catch (error) {
       console.error("Erreur commande:", error);
       Modal.error({
         title: "Erreur",
-        content: "Impossible de passer la commande. Veuillez réessayer.",
+        content:
+          error.message ||
+          "Impossible de passer la commande. Veuillez réessayer.",
       });
     }
   };
 
   // Contenu du panier
   const CartContent = () => (
-    <div>
-      {cart.items.length === 0 ? (
-        <Empty
-          description="Votre panier est vide"
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-        />
-      ) : (
-        <>
-          {/* Liste des articles */}
-          <List
-            dataSource={cart.items}
-            renderItem={(item) => (
-              <List.Item
-                style={{ padding: "12px 0" }}
-                actions={[
-                  <Button
-                    type="text"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => handleRemoveItem(item.id)}
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* En-tête */}
+      <div
+        style={{ padding: "20px 24px 0", borderBottom: "1px solid #f0f0f0" }}
+      >
+        <Space justify="space-between" style={{ width: "100%" }}>
+          <Title level={4} style={{ margin: 0 }}>
+            <ShoppingCartOutlined /> Votre panier
+          </Title>
+          <Button type="text" icon={<CloseOutlined />} onClick={onClose} />
+        </Space>
+
+        {tableSession && (
+          <div style={{ marginTop: 8, marginBottom: 16 }}>
+            <Tag color="blue">Table {tableSession.tableNumber}</Tag>
+          </div>
+        )}
+      </div>
+
+      {/* Contenu principal */}
+      <div
+        style={{
+          flex: 1,
+          overflow: "auto",
+          padding: cart.items.length > 0 ? "16px 24px" : "0",
+        }}
+      >
+        {cart.items.length === 0 ? (
+          <div
+            style={{
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="Votre panier est vide"
+              style={{ color: "#8c8c8c" }}
+            >
+              <Text type="secondary">
+                Parcourez notre menu et ajoutez vos plats préférés !
+              </Text>
+            </Empty>
+          </div>
+        ) : (
+          <>
+            {/* Articles du panier */}
+            <List
+              dataSource={cart.items}
+              renderItem={(item) => (
+                <List.Item style={{ padding: "12px 0", border: "none" }}>
+                  <Card
                     size="small"
-                  />,
-                ]}
-              >
-                <List.Item.Meta
-                  avatar={
-                    <img
-                      src={
-                        item.image_url
-                          ? `${process.env.REACT_APP_API_URL}${item.image_url}`
-                          : "/images/placeholder-dish.jpg"
-                      }
-                      alt={item.name}
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 8,
-                        objectFit: "cover",
-                      }}
-                    />
-                  }
-                  title={
-                    <div>
-                      <Text strong>{item.name}</Text>
-                      <br />
-                      <Text type="secondary" style={{ fontSize: 12 }}>
+                    style={{ width: "100%" }}
+                    bodyStyle={{ padding: "12px 16px" }}
+                  >
+                    <div style={{ marginBottom: 8 }}>
+                      <Space justify="space-between" style={{ width: "100%" }}>
+                        <Text strong>{item.name}</Text>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={() => handleRemoveItem(item.id)}
+                          danger
+                        />
+                      </Space>
+
+                      <Text type="secondary" style={{ fontSize: "12px" }}>
                         {formatCurrency(item.price)} × {item.quantity}
                       </Text>
                     </div>
-                  }
-                  description={
-                    <div>
-                      {item.special_instructions && (
-                        <Text style={{ fontSize: 11, color: "#666" }}>
-                          Note: {item.special_instructions}
-                        </Text>
+
+                    {/* Contrôles quantité */}
+                    <Space justify="space-between" style={{ width: "100%" }}>
+                      <Space>
+                        <Button
+                          size="small"
+                          icon={<MinusOutlined />}
+                          onClick={() =>
+                            handleUpdateQuantity(item.id, item.quantity - 1)
+                          }
+                        />
+                        <InputNumber
+                          size="small"
+                          min={1}
+                          value={item.quantity}
+                          onChange={(value) =>
+                            handleUpdateQuantity(item.id, value)
+                          }
+                          style={{ width: 50 }}
+                        />
+                        <Button
+                          size="small"
+                          icon={<PlusOutlined />}
+                          onClick={() =>
+                            handleUpdateQuantity(item.id, item.quantity + 1)
+                          }
+                        />
+                      </Space>
+
+                      <Text strong>
+                        {formatCurrency(item.price * item.quantity)}
+                      </Text>
+                    </Space>
+
+                    {/* Instructions spéciales */}
+                    <div style={{ marginTop: 8 }}>
+                      {item.special_instructions ? (
+                        <div>
+                          <Text type="secondary" style={{ fontSize: "12px" }}>
+                            Instructions: {item.special_instructions}
+                          </Text>
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => handleEditInstructions(item)}
+                            style={{ padding: 0, marginLeft: 8 }}
+                          >
+                            Modifier
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={() => handleEditInstructions(item)}
+                          style={{ padding: 0, fontSize: "12px" }}
+                        >
+                          + Ajouter des instructions
+                        </Button>
                       )}
-                      <div style={{ marginTop: 8 }}>
-                        <Space>
-                          <Button
-                            size="small"
-                            icon={<MinusOutlined />}
-                            onClick={() =>
-                              handleUpdateQuantity(item.id, item.quantity - 1)
-                            }
-                            disabled={item.quantity <= 1}
-                          />
-                          <span>{item.quantity}</span>
-                          <Button
-                            size="small"
-                            icon={<PlusOutlined />}
-                            onClick={() =>
-                              handleUpdateQuantity(item.id, item.quantity + 1)
-                            }
-                          />
-                        </Space>
-                        <Text strong style={{ float: "right" }}>
-                          {formatCurrency(item.price * item.quantity)}
-                        </Text>
-                      </div>
                     </div>
-                  }
-                />
-              </List.Item>
-            )}
-          />
+                  </Card>
+                </List.Item>
+              )}
+            />
 
-          <Divider />
-
-          {/* Récapitulatif des prix */}
-          <div style={{ padding: "0 16px" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 8,
-              }}
-            >
-              <Text>Sous-total:</Text>
-              <Text>{formatCurrency(subtotal)}</Text>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 8,
-              }}
-            >
-              <Text>Taxes (18%):</Text>
-              <Text>{formatCurrency(taxAmount)}</Text>
-            </div>
-            <Divider style={{ margin: "12px 0" }} />
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 16,
-              }}
-            >
-              <Text strong style={{ fontSize: 16 }}>
-                Total:
+            {/* Instructions générales */}
+            <Card size="small" style={{ marginTop: 16 }}>
+              <Text strong style={{ fontSize: "12px" }}>
+                Instructions spéciales pour la commande
               </Text>
-              <Text strong style={{ fontSize: 16, color: "#1890ff" }}>
-                {formatCurrency(total)}
-              </Text>
-            </div>
-          </div>
+              <TextArea
+                rows={2}
+                placeholder="Allergies, préférences de cuisson, etc."
+                value={specialInstructions}
+                onChange={(e) => setSpecialInstructions(e.target.value)}
+                style={{ marginTop: 8 }}
+              />
+            </Card>
+          </>
+        )}
+      </div>
 
-          {/* Actions */}
-          <div style={{ padding: "0 16px" }}>
-            <Space direction="vertical" style={{ width: "100%" }}>
+      {/* Footer avec totaux et commande */}
+      {cart.items.length > 0 && (
+        <div
+          style={{
+            padding: "16px 24px",
+            borderTop: "1px solid #f0f0f0",
+            background: "#fafafa",
+          }}
+        >
+          <Space direction="vertical" style={{ width: "100%" }}>
+            {/* Résumé des prix */}
+            <div>
+              <Space justify="space-between" style={{ width: "100%" }}>
+                <Text>Sous-total:</Text>
+                <Text>{formatCurrency(subtotal)}</Text>
+              </Space>
+              <Space justify="space-between" style={{ width: "100%" }}>
+                <Text>TVA (18%):</Text>
+                <Text>{formatCurrency(taxAmount)}</Text>
+              </Space>
+              <Divider style={{ margin: "8px 0" }} />
+              <Space justify="space-between" style={{ width: "100%" }}>
+                <Text strong style={{ fontSize: "16px" }}>
+                  Total:
+                </Text>
+                <Text strong style={{ fontSize: "16px", color: "#1890ff" }}>
+                  {formatCurrency(total)}
+                </Text>
+              </Space>
+            </div>
+
+            {/* Boutons d'action */}
+            <Space style={{ width: "100%" }}>
               <Button
-                type="primary"
-                size="large"
-                block
-                loading={orderLoading}
-                onClick={handlePlaceOrder}
-                style={{ marginBottom: 8 }}
-              >
-                Commander ({formatCurrency(total)})
-              </Button>
-              <Button
-                type="text"
-                danger
                 icon={<ClearOutlined />}
                 onClick={handleClearCart}
-                block
+                style={{ flex: 1 }}
               >
-                Vider le panier
+                Vider
+              </Button>
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                loading={orderLoading}
+                onClick={handlePlaceOrder}
+                style={{ flex: 2 }}
+                size="large"
+              >
+                Commander
               </Button>
             </Space>
-          </div>
-        </>
+          </Space>
+        </div>
       )}
     </div>
   );
 
-  // Version mobile : FloatButton + Drawer
-  if (isMobile) {
-    return (
-      <>
-        <Badge count={cart.itemCount} size="small">
-          <FloatButton
-            icon={<ShoppingCartOutlined />}
-            type="primary"
-            onClick={() => setDrawerVisible(true)}
-            style={{ right: 24, bottom: 24 }}
-          />
-        </Badge>
+  return (
+    <>
+      <Drawer
+        title={null}
+        placement="right"
+        width={400}
+        open={visible}
+        onClose={onClose}
+        closable={false}
+        bodyStyle={{ padding: 0 }}
+        headerStyle={{ display: "none" }}
+      >
+        <CartContent />
+      </Drawer>
 
-        <Drawer
-          title={
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <span>Panier ({cart.itemCount} articles)</span>
-              {cart.items.length > 0 && (
-                <Text type="secondary">{formatCurrency(total)}</Text>
-              )}
-            </div>
-          }
-          placement="right"
-          open={drawerVisible}
-          onClose={() => setDrawerVisible(false)}
-          width="90%"
-        >
-          <CartContent />
-        </Drawer>
+      {/* Modal de modification des instructions */}
+      <Modal
+        title="Instructions spéciales"
+        open={!!editingItem}
+        onOk={handleSaveInstructions}
+        onCancel={() => {
+          setEditingItem(null);
+          setItemInstructions("");
+        }}
+        okText="Sauvegarder"
+        cancelText="Annuler"
+      >
+        <TextArea
+          rows={3}
+          placeholder="Précisions pour ce plat (allergies, cuisson, etc.)"
+          value={itemInstructions}
+          onChange={(e) => setItemInstructions(e.target.value)}
+        />
+      </Modal>
 
+      {/* Modal de succès */}
+      {orderSuccess && (
         <OrderSuccessModal
           visible={orderSuccess}
           order={successOrder}
-          onClose={() => setOrderSuccess(false)}
+          onClose={() => {
+            setOrderSuccess(false);
+            setSuccessOrder(null);
+          }}
         />
-      </>
-    );
-  }
-
-  // Version desktop : Card fixe
-  return (
-    <>
-      <Card
-        title={
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span>Panier ({cart.itemCount})</span>
-            {cart.items.length > 0 && (
-              <Text type="secondary">{formatCurrency(total)}</Text>
-            )}
-          </div>
-        }
-        size="small"
-        style={{
-          position: "sticky",
-          top: 20,
-          maxHeight: "calc(100vh - 40px)",
-          overflow: "auto",
-        }}
-      >
-        <CartContent />
-      </Card>
-
-      <OrderSuccessModal
-        visible={orderSuccess}
-        order={successOrder}
-        onClose={() => setOrderSuccess(false)}
-      />
+      )}
     </>
   );
 };

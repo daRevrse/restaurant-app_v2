@@ -1,3 +1,4 @@
+// backend/services/tableService.js - Version complète avec méthodes manquantes
 const { Table, TableSession } = require("../models");
 const QRCode = require("qrcode");
 const crypto = require("crypto");
@@ -41,6 +42,39 @@ class TableService {
     return qrCodeImage;
   }
 
+  // NOUVELLE MÉTHODE : Récupérer table par ID
+  async getTableById(tableId) {
+    return await Table.findByPk(tableId, {
+      include: [
+        {
+          model: TableSession,
+          as: "sessions",
+          where: { status: "active" },
+          required: false,
+          limit: 1,
+          order: [["started_at", "DESC"]],
+        },
+      ],
+    });
+  }
+
+  // NOUVELLE MÉTHODE : Récupérer table par numéro
+  async getTableByNumber(tableNumber) {
+    return await Table.findOne({
+      where: { number: tableNumber },
+      include: [
+        {
+          model: TableSession,
+          as: "sessions",
+          where: { status: "active" },
+          required: false,
+          limit: 1,
+          order: [["started_at", "DESC"]],
+        },
+      ],
+    });
+  }
+
   async updateTableStatus(tableId, newStatus, notes = null) {
     const validStatuses = [
       "free",
@@ -78,8 +112,8 @@ class TableService {
     // Créer une nouvelle session
     const session = await TableSession.create({
       table_id: tableId,
-      customer_name: customerData.customer_name,
-      customer_phone: customerData.customer_phone,
+      customer_name: customerData.customer_name || "Client",
+      customer_phone: customerData.customer_phone || null,
       guest_count: customerData.guest_count || 1,
       status: "active",
     });
@@ -93,7 +127,18 @@ class TableService {
       { where: { id: tableId } }
     );
 
-    return session;
+    // Recharger la session avec les relations
+    const completeSession = await TableSession.findByPk(session.id, {
+      include: [
+        {
+          model: Table,
+          as: "table",
+          attributes: ["id", "number", "capacity"],
+        },
+      ],
+    });
+
+    return completeSession;
   }
 
   async endTableSession(sessionId, paymentData = null) {
@@ -118,7 +163,7 @@ class TableService {
     // Libérer la table
     await Table.update(
       {
-        status: "cleaning",
+        status: "cleaning", // Mettre en nettoyage plutôt que libre
         current_session_id: null,
       },
       { where: { id: session.table_id } }
@@ -142,6 +187,58 @@ class TableService {
           order: [["started_at", "DESC"]],
         },
       ],
+      order: [["number", "ASC"]],
+    });
+  }
+
+  // NOUVELLE MÉTHODE : Valider disponibilité table
+  async validateTableAvailability(tableNumber) {
+    const table = await this.getTableByNumber(tableNumber);
+
+    if (!table) {
+      throw new Error("Table non trouvée");
+    }
+
+    if (table.status !== "free") {
+      throw new Error(
+        `Table ${tableNumber} n'est pas disponible (statut: ${table.status})`
+      );
+    }
+
+    return table;
+  }
+
+  // NOUVELLE MÉTHODE : Obtenir statistiques des tables
+  async getTableStats() {
+    const stats = await Table.findAll({
+      attributes: [
+        "status",
+        [Table.sequelize.fn("COUNT", Table.sequelize.col("id")), "count"],
+      ],
+      group: ["status"],
+    });
+
+    const totalTables = await Table.count();
+
+    return {
+      total: totalTables,
+      byStatus: stats.reduce((acc, stat) => {
+        acc[stat.status] = parseInt(stat.dataValues.count);
+        return acc;
+      }, {}),
+    };
+  }
+
+  // NOUVELLE MÉTHODE : Recherche de tables disponibles
+  async findAvailableTables(capacity = null) {
+    const whereClause = { status: "free" };
+
+    if (capacity) {
+      whereClause.capacity = { [Table.sequelize.Op.gte]: capacity };
+    }
+
+    return await Table.findAll({
+      where: whereClause,
       order: [["number", "ASC"]],
     });
   }

@@ -1,3 +1,4 @@
+// frontend/src/App.js - Routes mises à jour pour le système de tables
 import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Layout, Spin } from "antd";
@@ -7,6 +8,7 @@ import AppSidebar from "./components/common/AppSidebar";
 import AppHeader from "./components/common/AppHeader";
 import LoginPage from "./pages/LoginPage";
 import QRScannerPage from "./pages/QRScannerPage";
+import TableMenuPage from "./pages/TableMenuPage";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import CustomerDashboard from "./components/customer/CustomerDashboard";
 import AdminDashboard from "./components/admin/AdminDashboard";
@@ -58,62 +60,98 @@ const AppContent = () => {
               margin: auth.isAuthenticated ? "24px 16px" : 0,
               padding: auth.isAuthenticated ? 24 : 0,
               minHeight: 280,
-              background: auth.isAuthenticated ? "#f0f2f5" : "#fff",
-              overflow: "initial",
+              background: auth.isAuthenticated ? "#fff" : "transparent",
             }}
           >
             <Routes>
               {/* Routes publiques */}
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/scan" element={<QRScannerPage />} />
+              <Route path="/qr-scanner" element={<QRScannerPage />} />
+              <Route path="/table-menu" element={<TableMenuPage />} />
 
-              {/* Routes par rôle - Customer */}
+              {/* Routes protégées pour les clients */}
               <Route
                 path="/"
                 element={
-                  <ProtectedRoute roles={["customer"]}>
+                  <ProtectedRoute allowedRoles={["customer"]}>
                     <CustomerDashboard />
                   </ProtectedRoute>
                 }
               />
 
-              {/* Routes par rôle - Admin */}
+              {/* Routes protégées pour les serveurs */}
               <Route
-                path="/admin/*"
+                path="/waiter"
                 element={
-                  <ProtectedRoute roles={["admin"]}>
-                    <AdminDashboard />
+                  <ProtectedRoute allowedRoles={["waiter", "admin"]}>
+                    <WaiterDashboard />
                   </ProtectedRoute>
                 }
               />
-
-              {/* Routes par rôle - Waiter */}
               <Route
                 path="/waiter/*"
                 element={
-                  <ProtectedRoute roles={["waiter", "admin"]}>
+                  <ProtectedRoute allowedRoles={["waiter", "admin"]}>
                     <WaiterDashboard />
                   </ProtectedRoute>
                 }
               />
 
-              {/* Routes par rôle - Kitchen */}
+              {/* Routes protégées pour la cuisine */}
+              <Route
+                path="/kitchen"
+                element={
+                  <ProtectedRoute allowedRoles={["kitchen", "admin"]}>
+                    <KitchenDashboard />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/kitchen/*"
                 element={
-                  <ProtectedRoute roles={["kitchen", "admin"]}>
+                  <ProtectedRoute allowedRoles={["kitchen", "admin"]}>
                     <KitchenDashboard />
                   </ProtectedRoute>
                 }
               />
 
-              {/* Route par défaut - Redirection basée sur le rôle */}
+              {/* Routes protégées pour l'admin */}
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute allowedRoles={["admin"]}>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/*"
+                element={
+                  <ProtectedRoute allowedRoles={["admin"]}>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Route de fallback - redirection intelligente */}
               <Route
                 path="*"
                 element={
-                  <ProtectedRoute>
-                    <div>Page non trouvée</div>
-                  </ProtectedRoute>
+                  auth.isAuthenticated ? (
+                    // Rediriger selon le rôle si connecté
+                    auth.user?.role === "admin" ? (
+                      <AdminDashboard />
+                    ) : auth.user?.role === "waiter" ? (
+                      <WaiterDashboard />
+                    ) : auth.user?.role === "kitchen" ? (
+                      <KitchenDashboard />
+                    ) : (
+                      <CustomerDashboard />
+                    )
+                  ) : (
+                    // Rediriger vers QR scanner si non connecté
+                    <QRScannerPage />
+                  )
                 }
               />
             </Routes>
@@ -124,12 +162,12 @@ const AppContent = () => {
   );
 };
 
-function App() {
+const App = () => {
   return (
     <AppProvider>
       <AppContent />
     </AppProvider>
   );
-}
+};
 
 export default App;
